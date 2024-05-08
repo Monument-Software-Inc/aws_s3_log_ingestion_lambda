@@ -11,7 +11,7 @@
 #
 # Happy Coding!
 
-service: ${env:SERVICE_NAME}
+service: newrelic-log-ingestion-s3
 # app and org for use with dashboard.serverless.com
 #app: your-app-name
 #org: your-org-name
@@ -23,36 +23,44 @@ service: ${env:SERVICE_NAME}
 provider:
   name: aws
   runtime: python3.11
-  iamRoleStatements:
-    - Effect: "Allow"
-      Action:
-        - "s3:GetObject"
-      Resource: "arn:aws:s3:::${env:S3_BUCKET_NAME}/*"
+  stage: ${self:custom.stage}
+  timeout: 30
+  memorySize: 128
+  region: ${opt:region, "us-east-2"}
+  iam:
+    role: arn:aws:iam::342510268597:role/mnmt-eng-infra-use2-prd-newrelic-ingestion-s3-integrations
+
+  deploymentBucket:
+    name: mnmt-eng-infra-use2-prd-deployments
 
 plugins:
+  - serverless-better-credentials # must be the first
   - serverless-python-requirements
+  - serverless-resource-policy
 
 custom:
+  stage: ${opt:stage, env:SLS_STAGE, 'dev'}
   pythonRequirements:
     fileName: ./src/requirements.txt
     dockerizePip: non-linux
 
 functions:
-  NewRelic-s3-log-ingestion:
+  sls-integrations-newrelic-log-ingestion-s3:
+    name: sls-integrations-newrelic-log-ingestion-s3
     handler: src/handler.lambda_handler
     environment:
       LICENSE_KEY: ${env:LICENSE_KEY}
-      LOG_TYPE: ${env:LOG_TYPE}
-      DEBUG_ENABLED: ${env:DEBUG_ENABLED}
-      S3_CLOUD_TRAIL_LOG_PATTERN: ${env:S3_CLOUD_TRAIL_LOG_PATTERN}
-      S3_IGNORE_PATTERN: ${env:S3_IGNORE_PATTERN}
-      BATCH_SIZE_FACTOR: ${env:BATCH_SIZE_FACTOR}
-      ADDITIONAL_ATTRIBUTES: ${env:ADDITIONAL_ATTRIBUTES}
+      LOG_TYPE: ${env:LOG_TYPE, ""}
+      DEBUG_ENABLED: ${env:DEBUG_ENABLED, "False"}
+      S3_CLOUD_TRAIL_LOG_PATTERN: ${env:S3_CLOUD_TRAIL_LOG_PATTERN, ".*_CloudTrail_.*\\.json.gz$"}
+      S3_IGNORE_PATTERN: ${env:S3_IGNORE_PATTERN, "$^"}
+      BATCH_SIZE_FACTOR: ${env:BATCH_SIZE_FACTOR, 1.5}
+      ADDITIONAL_ATTRIBUTES: ${env:ADDITIONAL_ATTRIBUTES, "{}"}
       
-    events:
-      - s3:
-          bucket: ${env:S3_BUCKET_NAME}
-          event: s3:ObjectCreated:*
-          rules:
-            - prefix: ${env:S3_PREFIX, ""}
-          existing: true
+#    events:
+#      - s3:
+#          bucket: ${env:S3_BUCKET_NAME}
+#          event: s3:ObjectCreated:*
+#          rules:
+#            - prefix: ${env:S3_PREFIX, ""}
+#          existing: true
